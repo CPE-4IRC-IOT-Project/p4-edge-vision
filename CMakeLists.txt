@@ -2,5 +2,7 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
+set(IDF_TARGET esp32p4)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(hello_p4)
+project(p4-edge-vision)

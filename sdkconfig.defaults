@@ -1,0 +1,22 @@
+# ── ESP32-P4-EYE : sdkconfig defaults ──
+
+# PSRAM (frame buffers + model weights)
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_200M=y
+
+# Camera : MIPI-CSI pipeline + ISP
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
+CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=y
+
+# Camera sensor driver
+CONFIG_CAMERA_OV2710=y
+
+# Partition table : single factory app (default)
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Stack size for main task (model loading needs headroom)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Enable C++ exceptions (esp-dl may use them)
+CONFIG_COMPILER_CXX_EXCEPTIONS=y
