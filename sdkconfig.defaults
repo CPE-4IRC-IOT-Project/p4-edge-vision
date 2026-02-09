@@ -12,8 +12,13 @@ CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=y
 # Camera sensor driver
 CONFIG_CAMERA_OV2710=y
 
-# Partition table : single factory app (default)
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# Partition table : custom (3 MB app partition for DL model)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# Flash size (ESP32-P4-EYE has 16 MB flash)
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 # Stack size for main task (model loading needs headroom)
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

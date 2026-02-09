@@ -6,3 +6,6 @@ set(IDF_TARGET esp32p4)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(p4-edge-vision)
+
+# Workaround: esp-dl triggers -Wstringop-overflow with GCC 14.2 (false positive in dl_tensor_base.cpp)
+idf_build_set_property(COMPILE_OPTIONS "-Wno-stringop-overflow" APPEND)

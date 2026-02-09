@@ -24,13 +24,15 @@
 
 /* BSP ESP32-P4-EYE */
 #include "bsp/esp32_p4_eye.h"
+#include "esp_video_device.h"
 
 /* V4L2 */
 #include "linux/videodev2.h"
 
 /* esp-dl : detection de pietons */
-#include "dl_detect_pedestrian_detect.hpp"
-#include "dl_image.hpp"
+#include "pedestrian_detect.hpp"
+#include "dl_image_define.hpp"
+#include "dl_detect_define.hpp"
 
 /* ---------- configuration ---------- */
 #define UART_PORT       UART_NUM_0
@@ -217,7 +219,7 @@ extern "C" void app_main(void)
 
         /* Meilleure confiance parmi les detections */
         int confidence = 0;
-        for (auto &r : results) {
+        for (const auto &r : results) {
             int score_pct = (int)(r.score * 100.0f);
             if (score_pct > confidence) confidence = score_pct;
         }
