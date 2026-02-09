@@ -43,7 +43,7 @@ jobs:
       - name: Build with ESP-IDF (esp32p4)
         uses: espressif/esp-idf-ci-action@v1
         with:
-          esp_idf_version: v5.4.1
+          esp_idf_version: v5.5.1
           target: esp32p4
           path: .
 
