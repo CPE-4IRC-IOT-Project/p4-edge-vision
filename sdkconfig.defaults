@@ -20,8 +20,8 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 # Flash size (ESP32-P4-EYE has 16 MB flash)
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
-# Stack size for main task (model loading needs headroom)
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# Stack size for main task (model loading + 1080p frame processing)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # Enable C++ exceptions (esp-dl may use them)
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
