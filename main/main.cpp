@@ -158,7 +158,8 @@ static int cam_set_format(int fd)
         ESP_LOGE(TAG, "VIDIOC_S_FMT failed");
         return -1;
     }
-    ESP_LOGI(TAG, "Format set: %ux%u", fmt.fmt.pix.width, fmt.fmt.pix.height);
+    ESP_LOGI(TAG, "Format set: %lux%lu", (unsigned long)fmt.fmt.pix.width,
+             (unsigned long)fmt.fmt.pix.height);
     return 0;
 }
 

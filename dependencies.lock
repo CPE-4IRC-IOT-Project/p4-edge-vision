@@ -10,7 +10,7 @@ dependencies:
       require: private
       version: '>=4.0'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 4.1.5
   espressif/cmake_utilities:
@@ -70,40 +70,10 @@ dependencies:
       type: service
     version: 1.7.0
   espressif/esp32_p4_eye:
-    component_hash: cca7952718c367635bf8be06273fe920743a91f98f9e409b46b6b710915298a5
-    dependencies:
-    - name: espressif/button
-      registry_url: https://components.espressif.com
-      require: public
-      version: ^4
-    - name: espressif/esp_codec_dev
-      registry_url: https://components.espressif.com
-      require: public
-      version: ~1.5
-    - name: espressif/esp_video
-      registry_url: https://components.espressif.com
-      require: public
-      version: ~1.4
-    - name: espressif/esp_lvgl_port
-      registry_url: https://components.espressif.com
-      require: public
-      version: ^2
-    - name: idf
-      require: private
-      version: '>=5.4'
-    - name: espressif/knob
-      registry_url: https://components.espressif.com
-      require: public
-      version: ^1
-    - name: espressif/led_indicator
-      registry_url: https://components.espressif.com
-      require: public
-      version: ^2
+    dependencies: []
     source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32p4
+      path: /home/valentine/CPE_LYON/S8/Projet_IOT/p4-edge-vision/components/espressif__esp32_p4_eye
+      type: local
     version: 2.0.1
   espressif/esp_cam_sensor:
     component_hash: db5b1c725799dced61e7b100dc027e1e59558c9973d7e1ed8ce42a5ec89da31c
@@ -137,7 +107,7 @@ dependencies:
       require: private
       version: '>=4.0'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 1.5.4
   espressif/esp_h264:
@@ -177,7 +147,7 @@ dependencies:
       require: public
       version: '>=8,<10'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 2.7.0
   espressif/esp_new_jpeg:
@@ -260,7 +230,7 @@ dependencies:
       require: private
       version: '>=4.4.1'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 1.0.2
   espressif/led_indicator:
@@ -278,7 +248,7 @@ dependencies:
       require: public
       version: 3.*
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     version: 2.1.1
   espressif/led_strip:
@@ -328,7 +298,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.2
+    version: 5.4.1
   lvgl/lvgl:
     component_hash: 17e68bfd21f0edf4c3ee838e2273da840bf3930e5dbc3bfa6c1190c3aed41f9f
     dependencies: []
@@ -337,10 +307,16 @@ dependencies:
       type: service
     version: 9.4.0
 direct_dependencies:
+- espressif/button
 - espressif/esp-dl
 - espressif/esp32_p4_eye
+- espressif/esp_codec_dev
+- espressif/esp_lvgl_port
 - espressif/esp_video
+- espressif/knob
+- espressif/led_indicator
 - espressif/pedestrian_detect
-manifest_hash: 3cf96c13987b85267f0f0d81c75ed4967a33009a2c660c03c98176471ce9ebc5
+- idf
+manifest_hash: 8e5ddc5b261be512872212950fe7a262ce4a3f3a8180d0de7a0d6daaae083cd3
 target: esp32p4
 version: 2.0.0
