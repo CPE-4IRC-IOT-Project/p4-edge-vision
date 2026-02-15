@@ -6,20 +6,32 @@
 
 #include <stdio.h>
 #include "esp_log.h"
-#include "esp_memory_utils.h"
 #include "nvs_flash.h"
-#include "nvs.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "bsp/esp-bsp.h"
-
-#include "ui_extra.h"
-
-#include "app_control.h"
-#include "app_video_stream.h"
-#include "app_ai_detect.h"
-#include "app_qma6100.h"
+#include "app_vision_event.h"
 
 static const char *TAG = "main";
+
+static void vision_event_task(void *arg)
+{
+    (void)arg;
+
+    ESP_LOGI(TAG, "Initialize I2C");
+    i2c_master_bus_handle_t i2c_handle = NULL;
+    ESP_ERROR_CHECK(bsp_i2c_init());
+    bsp_get_i2c_bus_handle(&i2c_handle);
+
+    ESP_LOGI(TAG, "Start event-only pedestrian detection");
+    ESP_ERROR_CHECK(app_vision_event_start(i2c_handle));
+
+    ESP_LOGI(TAG, "Vision event mode running");
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 void app_main(void)
 {
@@ -32,50 +44,18 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // Initialize the flashlight
+    // Keep flashlight available even in headless mode
     ESP_LOGI(TAG, "Initialize the flashlight");
     ESP_ERROR_CHECK(bsp_flashlight_init());
 
-    // Initialize the I2C first (needed for QMA6100)
-    ESP_LOGI(TAG, "Initialize the I2C");
-    i2c_master_bus_handle_t i2c_handle;
-    ESP_ERROR_CHECK(bsp_i2c_init());
-    bsp_get_i2c_bus_handle(&i2c_handle);
-
-    // Initialize the AI detect
-    ESP_LOGI(TAG, "Initialize the AI detect");
-    ESP_ERROR_CHECK(app_ai_detect_init());
-
-    // Initialize the display
-    ESP_LOGI(TAG, "Initialize the display");
-    bsp_display_start();
-
-    bsp_display_lock(0);
-    ui_extra_init();
-    bsp_display_unlock();
-
-    // Initialize the QMA6100 IMU sensor with integrated display auto-rotation
-    ESP_LOGI(TAG, "Initialize the QMA6100 IMU sensor with display auto-rotation");
-    ret = app_qma6100_init(i2c_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize QMA6100: %s", esp_err_to_name(ret));
-        return;
-    }
-
-    // Initialize the storage
-    //ESP_LOGI(TAG, "Initialize the storage");
-    //ESP_ERROR_CHECK(app_storage_init());
-
-    // Turn on the display backlight
-    bsp_display_backlight_on();
-
-    // Initialize the application control module
-    ESP_LOGI(TAG, "Initialize the application control module");
-    ESP_ERROR_CHECK(app_control_init());
-
-    // Initialize the video streaming application
-    ESP_LOGI(TAG, "Initialize the video streaming application");
-    ESP_ERROR_CHECK(app_video_stream_init(i2c_handle));
-    
-    ESP_LOGI(TAG, "Application initialization completed");
+    BaseType_t task_ok = xTaskCreatePinnedToCore(
+        vision_event_task,
+        "vision_event",
+        8 * 1024,
+        NULL,
+        5,
+        NULL,
+        1
+    );
+    ESP_ERROR_CHECK(task_ok == pdPASS ? ESP_OK : ESP_FAIL);
 }
