@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <inttypes.h>
+#include <stdio.h>
 
 #include "esp_log.h"
 #include "esp_check.h"
@@ -33,6 +34,52 @@ static constexpr uint32_t INFERENCE_STRIDE = 3;
 static constexpr uint32_t HEARTBEAT_INTERVAL_FRAMES = 120;
 static constexpr float DETECT_SCORE_THRESHOLD = 0.5f;
 static constexpr int PREVIEW_SCALE_LEVEL = 1;  // x1 (widest view available in current crop pipeline)
+static constexpr uint32_t STABLE_COUNT_FRAMES = 5;
+
+static int s_stable_count = 0;
+static int s_candidate_count = 0;
+static uint32_t s_candidate_frames = 0;
+
+static void update_mode_label(int stable_count)
+{
+    if (s_mode_label == nullptr) {
+        return;
+    }
+
+    char label_text[48];
+    snprintf(label_text, sizeof(label_text), "MODE: PEDESTRIAN  N=%d", stable_count);
+
+    if (bsp_display_lock(0)) {
+        lv_label_set_text(s_mode_label, label_text);
+        bsp_display_unlock();
+    }
+}
+
+static void update_stable_count_and_emit_event(int count_frame)
+{
+    if (count_frame == s_stable_count) {
+        s_candidate_count = s_stable_count;
+        s_candidate_frames = 0;
+        return;
+    }
+
+    if (count_frame != s_candidate_count) {
+        s_candidate_count = count_frame;
+        s_candidate_frames = 1;
+    } else {
+        s_candidate_frames++;
+    }
+
+    if (s_candidate_frames >= STABLE_COUNT_FRAMES) {
+        s_stable_count = s_candidate_count;
+        s_candidate_frames = 0;
+
+        // Serial-friendly event line for external consumers
+        ESP_LOGI(TAG, "EVENT occupancy_changed stable_count=%d occupied=%d",
+                 s_stable_count, s_stable_count > 0 ? 1 : 0);
+        update_mode_label(s_stable_count);
+    }
+}
 
 static esp_err_t init_display_preview(void)
 {
@@ -53,7 +100,7 @@ static esp_err_t init_display_preview(void)
     lv_obj_clear_flag(s_canvas, LV_OBJ_FLAG_SCROLLABLE);
 
     s_mode_label = lv_label_create(lv_scr_act());
-    lv_label_set_text(s_mode_label, "MODE: PEDESTRIAN");
+    lv_label_set_text(s_mode_label, "MODE: PEDESTRIAN  N=0");
     lv_obj_align(s_mode_label, LV_ALIGN_TOP_MID, 0, 6);
     lv_obj_set_style_bg_opa(s_mode_label, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_bg_color(s_mode_label, lv_color_hex(0x101010), LV_PART_MAIN);
@@ -110,7 +157,6 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
     }
 
     int ped_count = 0;
-    float best_score = 0.0f;
 
     if (s_frame_count <= WARMUP_FRAMES) {
         // Warm-up only; show preview without running inference.
@@ -127,7 +173,6 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
             }
 
             ped_count++;
-            best_score = std::max(best_score, res.score);
             draw_rectangle_rgb(
                 reinterpret_cast<uint16_t *>(preview_buf),
                 BSP_LCD_H_RES,
@@ -140,11 +185,16 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
             );
         }
 
-        if (ped_count > 0) {
-            ESP_LOGI(TAG, "frame=%" PRIu32 " pedestrians=%d best_score=%.2f",
-                     s_frame_count, ped_count, best_score);
-        } else if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
-            ESP_LOGI(TAG, "frame=%" PRIu32 " no pedestrian", s_frame_count);
+        update_stable_count_and_emit_event(ped_count);
+
+        if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
+            if (s_stable_count > 0) {
+                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat occupied stable_count=%d raw_count=%d",
+                         s_frame_count, s_stable_count, ped_count);
+            } else {
+                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat empty stable_count=0 raw_count=%d",
+                         s_frame_count, ped_count);
+            }
         }
     }
 
