@@ -32,13 +32,46 @@ static size_t s_preview_buffer_size = 0;
 static constexpr uint32_t WARMUP_FRAMES = 30;
 static constexpr uint32_t INFERENCE_STRIDE = 3;
 static constexpr uint32_t HEARTBEAT_INTERVAL_FRAMES = 120;
-static constexpr float DETECT_SCORE_THRESHOLD = 0.5f;
+static constexpr float DETECT_SCORE_THRESHOLD = 0.7f;
+static constexpr uint32_t MIN_BBOX_AREA_PX = 1200;
+static constexpr uint8_t LOW_LIGHT_LUMA_THRESHOLD = 18;
+static constexpr uint32_t LUMA_SAMPLE_STRIDE = 32;
 static constexpr int PREVIEW_SCALE_LEVEL = 1;  // x1 (widest view available in current crop pipeline)
 static constexpr uint32_t STABLE_COUNT_FRAMES = 5;
 
 static int s_stable_count = 0;
 static int s_candidate_count = 0;
 static uint32_t s_candidate_frames = 0;
+
+static uint8_t estimate_avg_luma_rgb565(const uint16_t *buffer, int pixel_count)
+{
+    if (buffer == nullptr || pixel_count <= 0) {
+        return 255;
+    }
+
+    uint64_t luma_acc = 0;
+    uint32_t samples = 0;
+
+    for (int i = 0; i < pixel_count; i += LUMA_SAMPLE_STRIDE) {
+        uint16_t p = buffer[i];
+        uint8_t r5 = (p >> 11) & 0x1F;
+        uint8_t g6 = (p >> 5) & 0x3F;
+        uint8_t b5 = p & 0x1F;
+
+        uint8_t r8 = (r5 << 3) | (r5 >> 2);
+        uint8_t g8 = (g6 << 2) | (g6 >> 4);
+        uint8_t b8 = (b5 << 3) | (b5 >> 2);
+
+        uint16_t luma = static_cast<uint16_t>((77 * r8 + 150 * g8 + 29 * b8) >> 8);
+        luma_acc += luma;
+        samples++;
+    }
+
+    if (samples == 0) {
+        return 255;
+    }
+    return static_cast<uint8_t>(luma_acc / samples);
+}
 
 static void update_mode_label(int stable_count)
 {
@@ -161,34 +194,61 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
     if (s_frame_count <= WARMUP_FRAMES) {
         // Warm-up only; show preview without running inference.
     } else if ((s_frame_count % INFERENCE_STRIDE) == 0) {
-        auto results = app_pedestrian_detect(
+        uint8_t avg_luma = estimate_avg_luma_rgb565(
             reinterpret_cast<uint16_t *>(preview_buf),
-            BSP_LCD_H_RES,
-            BSP_LCD_V_RES
+            BSP_LCD_H_RES * BSP_LCD_V_RES
         );
+        bool is_low_light = (avg_luma <= LOW_LIGHT_LUMA_THRESHOLD);
 
-        for (const auto &res : results) {
-            if (res.score < DETECT_SCORE_THRESHOLD || res.box.size() < 4) {
-                continue;
-            }
-
-            ped_count++;
-            draw_rectangle_rgb(
+        if (!is_low_light) {
+            auto results = app_pedestrian_detect(
                 reinterpret_cast<uint16_t *>(preview_buf),
                 BSP_LCD_H_RES,
-                BSP_LCD_V_RES,
-                res.box[0], res.box[1], res.box[2], res.box[3],
-                0, 0,
-                255, 0, 0,
-                3,
-                false
+                BSP_LCD_V_RES
             );
+
+            for (const auto &res : results) {
+                if (res.score < DETECT_SCORE_THRESHOLD || res.box.size() < 4) {
+                    continue;
+                }
+
+                int x1 = res.box[0];
+                int y1 = res.box[1];
+                int x2 = res.box[2];
+                int y2 = res.box[3];
+                int box_w = x2 - x1;
+                int box_h = y2 - y1;
+
+                if (box_w <= 0 || box_h <= 0) {
+                    continue;
+                }
+
+                uint32_t box_area = static_cast<uint32_t>(box_w * box_h);
+                if (box_area < MIN_BBOX_AREA_PX) {
+                    continue;
+                }
+
+                ped_count++;
+                draw_rectangle_rgb(
+                    reinterpret_cast<uint16_t *>(preview_buf),
+                    BSP_LCD_H_RES,
+                    BSP_LCD_V_RES,
+                    x1, y1, x2, y2,
+                    0, 0,
+                    255, 0, 0,
+                    3,
+                    false
+                );
+            }
         }
 
         update_stable_count_and_emit_event(ped_count);
 
         if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
-            if (s_stable_count > 0) {
+            if (is_low_light) {
+                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat low_light luma=%u stable_count=%d raw_count=%d",
+                         s_frame_count, avg_luma, s_stable_count, ped_count);
+            } else if (s_stable_count > 0) {
                 ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat occupied stable_count=%d raw_count=%d",
                          s_frame_count, s_stable_count, ped_count);
             } else {
