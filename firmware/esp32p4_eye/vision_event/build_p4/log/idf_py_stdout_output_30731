@@ -1,0 +1,110 @@
+Command: /home/valentine/.espressif/python_env/idf5.5_py3.12_env/bin/python /home/valentine/esp/esp-idf/tools/idf_monitor.py -p /dev/ttyACM0 -b 115200 --toolchain-prefix riscv32-esp-elf- --target esp32p4 --revision 1 --decode-panic backtrace /home/valentine/CPE_LYON/S8/Projet_IOT/esp-dev-kits/examples/esp32-p4-eye/examples/factory_demo/build_p4/factory_demo.elf /home/valentine/CPE_LYON/S8/Projet_IOT/esp-dev-kits/examples/esp32-p4-eye/examples/factory_demo/build_p4/bootloader/bootloader.elf -m '/home/valentine/.espressif/python_env/idf5.5_py3.12_env/bin/python' '/home/valentine/esp/esp-idf/tools/idf.py' '-B' 'build_p4' '-p' '/dev/ttyACM0'
+ESP-ROM:esp32p4-eco2-20240710
+Build:Jul 10 2024
+rst:0x17 (CHIP_USB_UART_RESET),boot:0x308 (SPI_FAST_FLASH_BOOT)
+Core0 Saved PC:0x4fc04244
+Core1 Saved PC:0x4fc058e0
+SPI mode:DIO, clock div:1
+load:0x4ff33ce0,len:0x164c
+load:0x4ff29ed0,len:0xd64
+load:0x4ff2cbd0,len:0x3364
+entry 0x4ff29eda
+[0;32mI (28) boot: ESP-IDF v5.5-dev-3749-g98cd765953-dirty 2nd stage bootloader[0m
+[0;32mI (28) boot: compile time Feb 15 2026 10:20:38[0m
+[0;32mI (29) boot: Multicore bootloader[0m
+[0;32mI (31) boot: chip revision: v1.3[0m
+[0;32mI (33) boot: efuse block revision: v0.3[0m
+[0;32mI (37) boot.esp32p4: SPI Speed      : 80MHz[0m
+[0;32mI (40) boot.esp32p4: SPI Mode       : DIO[0m
+[0;32mI (44) boot.esp32p4: SPI Flash Size : 16MB[0m
+[0;32mI (48) boot: Enabling RNG early entropy source...[0m
+[0;32mI (53) boot: Partition Table:[0m
+[0;32mI (55) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (61) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (68) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (74) boot:  2 factory          factory app      00 00 00010000 00a00000[0m
+[0;32mI (82) boot: End of partition table[0m
+[0;32mI (84) esp_image: segment 0: paddr=00010020 vaddr=48190020 size=4e783ch (5142588) map[0m
+[0;32mI (808) esp_image: segment 1: paddr=004f7864 vaddr=30100000 size=00388h (   904) load[0m
+[0;32mI (810) esp_image: segment 2: paddr=004f7bf4 vaddr=4ff00000 size=08424h ( 33828) load[0m
+[0;32mI (818) esp_image: segment 3: paddr=00500020 vaddr=48000020 size=183460h (1586272) map[0m
+[0;32mI (1041) esp_image: segment 4: paddr=00683488 vaddr=4ff08424 size=17150h ( 94544) load[0m
+[0;32mI (1058) esp_image: segment 5: paddr=0069a5e0 vaddr=50108080 size=00020h (    32) load[0m
+[0;32mI (1066) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (1066) boot: Disabling RNG early entropy source...[0m
+[0;32mI (1077) hex_psram: vendor id    : 0x0d (AP)[0m
+[0;32mI (1077) hex_psram: Latency      : 0x01 (Fixed)[0m
+[0;32mI (1078) hex_psram: DriveStr.    : 0x00 (25 Ohm)[0m
+[0;32mI (1078) hex_psram: dev id       : 0x03 (generation 4)[0m
+[0;32mI (1083) hex_psram: density      : 0x07 (256 Mbit)[0m
+[0;32mI (1087) hex_psram: good-die     : 0x06 (Pass)[0m
+[0;32mI (1092) hex_psram: SRF          : 0x02 (Slow Refresh)[0m
+[0;32mI (1096) hex_psram: BurstType    : 0x00 ( Wrap)[0m
+[0;32mI (1101) hex_psram: BurstLen     : 0x03 (2048 Byte)[0m
+[0;32mI (1105) hex_psram: BitMode      : 0x01 (X16 Mode)[0m
+[0;32mI (1110) hex_psram: Readlatency  : 0x04 (14 cycles@Fixed)[0m
+[0;32mI (1115) hex_psram: DriveStrength: 0x00 (1/1)[0m
+[0;32mI (1119) MSPI DQS: tuning success, best phase id is 0[0m
+[0;32mI (1296) MSPI DQS: tuning success, best delayline id is 17[0m
+I esp_psram: Found 32MB PSRAM device
+I esp_psram: Speed: 200MHz
+[0;32mI (1667) mmu_psram: .rodata xip on psram[0m
+[0;32mI (1784) mmu_psram: .text xip on psram[0m
+[0;32mI (1785) hex_psram: psram CS IO is dedicated[0m
+[0;32mI (1785) cpu_start: Multicore app[0m
+[0;32mI (1795) cpu_start: Pro cpu start user code[0m
+[0;32mI (1796) cpu_start: cpu freq: 360000000 Hz[0m
+[0;32mI (1796) app_init: Application information:[0m
+[0;32mI (1796) app_init: Project name:     factory_demo[0m
+[0;32mI (1800) app_init: App version:      1.0.0[0m
+[0;32mI (1804) app_init: Compile time:     Feb 15 2026 10:19:35[0m
+[0;32mI (1809) app_init: ELF file SHA256:  05723e202...[0m
+[0;32mI (1814) app_init: ESP-IDF:          v5.5-dev-3749-g98cd765953-dirty[0m
+[0;32mI (1820) efuse_init: Min chip rev:     v0.1[0m
+[0;32mI (1824) efuse_init: Max chip rev:     v1.99 [0m
+[0;32mI (1828) efuse_init: Chip rev:         v1.3[0m
+[0;32mI (1832) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (1838) heap_init: At 4FF23540 len 00017A80 (94 KiB): RAM[0m
+[0;32mI (1843) heap_init: At 4FF3AFC0 len 00004BF0 (18 KiB): RAM[0m
+[0;32mI (1848) heap_init: At 4FF40000 len 00040000 (256 KiB): RAM[0m
+[0;32mI (1854) heap_init: At 501080A0 len 00007F60 (31 KiB): RTCRAM[0m
+[0;32mI (1859) heap_init: At 30100388 len 00001C78 (7 KiB): TCM[0m
+[0;32mI (1864) esp_psram: Adding pool of 26112K of PSRAM memory to heap allocator[0m
+[0;32mI (1871) esp_psram: Adding pool of 50K of PSRAM memory gap generated due to end address alignment of irom to the heap allocator[0m
+[0;32mI (1882) esp_psram: Adding pool of 33K of PSRAM memory gap generated due to end address alignment of drom to the heap allocator[0m
+[0;32mI (1894) spi_flash: detected chip: generic[0m
+[0;32mI (1897) spi_flash: flash io: dio[0m
+[0;33mW (1900) bsp_p4_eye: Auto-initializing ESP32-P4-EYE board using constructor attribute[0m
+[0;32mI (1908) bsp_p4_eye: ESP32-P4-EYE board initialized successfully[0m
+[0;32mI (1914) main_task: Started on CPU0[0m
+[0;32mI (1917) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations[0m
+[0;32mI (1925) main_task: Calling app_main()[0m
+[0;32mI (1928) main: Initialize NVS[0m
+[0;32mI (1936) main: Initialize the flashlight[0m
+[0;32mI (1936) main: Initialize the I2C[0m
+[0;33mW (1938) i2c.master: Please check pull-up resistances whether be connected properly. Otherwise unexpected behavior would happen. For more detailed information, please read docs[0m
+[0;32mI (1953) main: Initialize the AI detect[0m
+[0;32mI (1957) app_ai_detect: Initialize the AI detect[0m
+[0;33mW (1961) FbsLoader: There is only one model in the flatbuffers, ignore the input model name![0m
+[0;33mW (1969) FbsLoader: CONFIG_SPIRAM_RODATA or CONFIG_SPIRAM_XIP_FROM_PSRAM option is on, fbs model is copyed to PSRAM.[0m
+[0;33mW (2048) FbsLoader: CONFIG_SPIRAM_RODATA or CONFIG_SPIRAM_XIP_FROM_PSRAM option is on, fbs model is copyed to PSRAM.[0m
+[0;33mW (2075) FbsLoader: CONFIG_SPIRAM_RODATA or CONFIG_SPIRAM_XIP_FROM_PSRAM option is on, fbs model is copyed to PSRAM.[0m
+[0;33mW (2087) FbsLoader: There is only one model in the flatbuffers, ignore the input model name![0m
+[0;33mW (2088) FbsLoader: CONFIG_SPIRAM_RODATA or CONFIG_SPIRAM_XIP_FROM_PSRAM option is on, fbs model is copyed to PSRAM.[0m
+[0;33mW (2686) dl::Model: Minimize() will delete variables not used in model inference, which will make it impossible to test or debug the model.[0m
+[0;32mI (2694) esp_painter: Painter initialized: 240x240, format: 0[0m
+[0;32mI (2694) app_camera_pipeline: new elements[0]:0x4867c2dc, internal:1[0m
+[0;32mI (2699) app_camera_pipeline: new elements[1]:0x4867dfe0, internal:1[0m
+[0;32mI (2705) app_camera_pipeline: new elements[2]:0x48738ce4, internal:1[0m
+[0;32mI (2711) app_camera_pipeline: new elements[3]:0x488338ac, internal:1[0m
+[0;32mI (2717) app_camera_pipeline: new elements[4]:0x48835530, internal:1[0m
+[0;32mI (2723) app_camera_pipeline: new pipeline 0x4867fd80, elem_num:5[0m
+[0;32mI (2729) app_camera_pipeline: new elements[0]:0x4867fd08, internal:1[0m
+[0;32mI (2735) app_camera_pipeline: new elements[1]:0x4867fe9c, internal:1[0m
+[0;32mI (2741) app_camera_pipeline: new elements[2]:0x4867fef0, internal:1[0m
+[0;32mI (2747) app_camera_pipeline: new elements[3]:0x4867ff44, internal:1[0m
+[0;32mI (2753) app_camera_pipeline: new elements[4]:0x4867ff98, internal:1[0m
+[0;32mI (2759) app_camera_pipeline: new pipeline 0x4867fce4, elem_num:5[0m
+[0;32mI (2765) main: Initialize the display[0m
+[0;32mI (2768) LVGL: Starting LVGL task[0m
+[0;3
