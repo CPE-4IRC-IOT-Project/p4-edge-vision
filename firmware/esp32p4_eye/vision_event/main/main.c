@@ -64,8 +64,8 @@ void app_main(void)
     }
 
     // Initialize the storage
-    ESP_LOGI(TAG, "Initialize the storage");
-    ESP_ERROR_CHECK(app_storage_init());
+    //ESP_LOGI(TAG, "Initialize the storage");
+    //ESP_ERROR_CHECK(app_storage_init());
 
     // Turn on the display backlight
     bsp_display_backlight_on();
