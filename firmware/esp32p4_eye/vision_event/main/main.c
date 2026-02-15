@@ -16,7 +16,6 @@
 
 #include "app_control.h"
 #include "app_video_stream.h"
-#include "app_storage.h"
 #include "app_ai_detect.h"
 #include "app_qma6100.h"
 

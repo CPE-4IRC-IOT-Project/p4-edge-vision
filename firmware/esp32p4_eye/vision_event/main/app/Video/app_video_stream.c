@@ -23,7 +23,6 @@
 #include "app_video_stream.h"
 #include "app_video_utils.h"
 #include "app_video_photo.h"
-#include "app_video_record.h"
 #include "app_ai_detect.h"
 #include "app_qma6100.h"
 
@@ -139,17 +138,13 @@ esp_err_t app_video_stream_set_photo_resolution_by_string(const char *resolution
 {
     if (strcmp(resolution_str, "480P") == 0 || strcmp(resolution_str, "480p") == 0) {
         app_video_stream_set_photo_resolution(PHOTO_RESOLUTION_480P);
-        app_video_stream_set_video_resolution(PHOTO_RESOLUTION_480P);
     } else if (strcmp(resolution_str, "720P") == 0 || strcmp(resolution_str, "720p") == 0) {
         app_video_stream_set_photo_resolution(PHOTO_RESOLUTION_720P);
-        app_video_stream_set_video_resolution(PHOTO_RESOLUTION_720P);
     } else if (strcmp(resolution_str, "1080P") == 0 || strcmp(resolution_str, "1080p") == 0) {
         app_video_stream_set_photo_resolution(PHOTO_RESOLUTION_1080P);
-        app_video_stream_set_video_resolution(PHOTO_RESOLUTION_1080P);
     } else {
         ESP_LOGW(TAG, "Unknown resolution string: %s, using default 1080P", resolution_str);
         app_video_stream_set_photo_resolution(PHOTO_RESOLUTION_1080P);
-        app_video_stream_set_video_resolution(PHOTO_RESOLUTION_1080P);
     }
 
     return ESP_OK;
@@ -196,9 +191,8 @@ esp_err_t app_video_stream_stop_take_photo(void)
  */
 esp_err_t app_video_stream_take_video(void)
 {
-    camera_state.flags.is_take_video = true;
-    app_video_stream_start_recording();
-    return ESP_OK;
+    camera_state.flags.is_take_video = false;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 /**
@@ -209,8 +203,7 @@ esp_err_t app_video_stream_take_video(void)
 esp_err_t app_video_stream_stop_take_video(void)
 {
     camera_state.flags.is_take_video = false;
-    app_video_stream_stop_recording();
-    return ESP_OK;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 /**
@@ -473,13 +466,6 @@ esp_err_t app_video_stream_init(i2c_master_bus_handle_t i2c_handle)
         goto cleanup;
     }
 
-    // Initialize video record
-    ret = app_video_record_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize video record: 0x%x", ret);
-        goto cleanup;
-    }
-
     // Start camera stream task
     ret = app_video_stream_task_start(camera_buffer.video_cam_fd, 0);
     if (ret != ESP_OK) {
@@ -630,9 +616,5 @@ static void camera_video_frame_operation(uint8_t *camera_buf, uint8_t camera_buf
             camera_state.flags.is_take_photo = false;
             take_and_save_photo(camera_buf, camera_buf_hes, camera_buf_ves);
         } 
-        // Handle video request
-        else if (camera_state.flags.is_take_video && ui_extra_get_current_page() == UI_PAGE_VIDEO_MODE) {
-            take_and_save_video(camera_buf, camera_buf_hes, camera_buf_ves);
-        }
     }
 }

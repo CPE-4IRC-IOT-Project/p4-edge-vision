@@ -8,7 +8,6 @@
 
 #include "ui_extra.h"
 #include "app_video_stream.h"
-#include "app_album.h"
 #include "app_control.h"
 
 /* Private definitions */
@@ -46,11 +45,6 @@ static void btn_handler(void *arg, void *data)
     
     bsp_display_lock(0);
 
-    if (ui_extra_handle_usb_disk_page()) {
-        bsp_display_unlock();
-        return;
-    }
-    
     switch (button_id) {
         case BSP_BUTTON_1:
             ui_extra_btn_menu();
@@ -58,18 +52,10 @@ static void btn_handler(void *arg, void *data)
             
         case BSP_BUTTON_2:
             ui_extra_btn_up();
-            if (ui_extra_get_current_page() == UI_PAGE_ALBUM && 
-                lv_obj_has_flag(ui_PanelImageScreenAlbumDelete, LV_OBJ_FLAG_HIDDEN)) {
-                app_album_prev_image();
-            }
             break;
             
         case BSP_BUTTON_3:
             ui_extra_btn_down();
-            if (ui_extra_get_current_page() == UI_PAGE_ALBUM && 
-                lv_obj_has_flag(ui_PanelImageScreenAlbumDelete, LV_OBJ_FLAG_HIDDEN)) {
-                app_album_next_image();
-            }
             break;
             
         case BSP_BUTTON_ED:
@@ -87,11 +73,6 @@ static void btn_handler(void *arg, void *data)
 /* Helper function to handle knob rotation */
 static void handle_knob_rotation(int direction, void (*action_camera)(void), void (*action_main)(void), void (*action_settings)(void))
 {
-    if (ui_extra_get_current_page() == UI_PAGE_ALBUM || 
-        ui_extra_get_current_page() == UI_PAGE_USB_DISK) {
-        return;
-    }
-
     int64_t current_time = esp_timer_get_time() / 1000;  // get current time in milliseconds
     
     // Check for timeout or direction change
@@ -114,7 +95,6 @@ static void handle_knob_rotation(int direction, void (*action_camera)(void), voi
         bsp_display_lock(0);
         if (ui_extra_get_current_page() == UI_PAGE_CAMERA || 
             ui_extra_get_current_page() == UI_PAGE_INTERVAL_CAM || 
-            ui_extra_get_current_page() == UI_PAGE_VIDEO_MODE ||
             ui_extra_get_current_page() == UI_PAGE_AI_DETECT) {
             action_camera();
         } else if (ui_extra_get_current_page() == UI_PAGE_MAIN) {
