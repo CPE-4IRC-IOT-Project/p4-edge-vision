@@ -15,11 +15,10 @@
 #include "app_pedestrian_detect.h"
 #include "app_vision_event.h"
 #include "app_drawing_utils.h"
+#include "protocol_uart_v1.h"
 
 extern "C" {
 #include "app_video_utils.h"
-
-void app_vision_event_uart_send_line(const char *line);
 }
 
 static const char *TAG = "app_vision_event";
@@ -44,6 +43,11 @@ static constexpr uint32_t STABLE_COUNT_FRAMES = 5;
 static int s_stable_count = 0;
 static int s_candidate_count = 0;
 static uint32_t s_candidate_frames = 0;
+
+static uint8_t saturate_to_u8(int value)
+{
+    return static_cast<uint8_t>(std::max(0, std::min(255, value)));
+}
 
 static uint8_t estimate_avg_luma_rgb565(const uint16_t *buffer, int pixel_count)
 {
@@ -90,7 +94,7 @@ static void update_mode_label(int stable_count)
     }
 }
 
-static void update_stable_count_and_emit_event(int count_frame)
+static void update_stable_count_and_emit_event(int count_frame, uint8_t avg_luma, bool is_low_light)
 {
     if (count_frame == s_stable_count) {
         s_candidate_count = s_stable_count;
@@ -113,11 +117,15 @@ static void update_stable_count_and_emit_event(int count_frame)
         ESP_LOGI(TAG, "EVENT occupancy_changed stable_count=%d occupied=%d",
                  s_stable_count, s_stable_count > 0 ? 1 : 0);
 
-        char uart_line[96];
-        snprintf(uart_line, sizeof(uart_line),
-                 "app_vision_event: EVENT occupancy_changed stable_count=%d occupied=%d",
-                 s_stable_count, s_stable_count > 0 ? 1 : 0);
-        app_vision_event_uart_send_line(uart_line);
+        uint8_t flags = is_low_light ? UART_V1_FLAG_LOW_LIGHT : 0;
+        app_vision_event_uart_send_payload_v1(
+            UART_V1_MSG_OCCUPANCY_CHANGED,
+            flags,
+            avg_luma,
+            s_stable_count > 0 ? 1 : 0,
+            saturate_to_u8(s_stable_count),
+            saturate_to_u8(count_frame)
+        );
         update_mode_label(s_stable_count);
     }
 }
@@ -250,7 +258,7 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
             }
         }
 
-        update_stable_count_and_emit_event(ped_count);
+        update_stable_count_and_emit_event(ped_count, avg_luma, is_low_light);
 
         if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
             char heartbeat_line[128];
@@ -269,10 +277,15 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
             }
 
             ESP_LOGI(TAG, "%s", heartbeat_line);
-
-            char uart_line[160];
-            snprintf(uart_line, sizeof(uart_line), "app_vision_event: %s", heartbeat_line);
-            app_vision_event_uart_send_line(uart_line);
+            uint8_t flags = is_low_light ? UART_V1_FLAG_LOW_LIGHT : 0;
+            app_vision_event_uart_send_payload_v1(
+                UART_V1_MSG_HEARTBEAT,
+                flags,
+                avg_luma,
+                s_stable_count > 0 ? 1 : 0,
+                saturate_to_u8(s_stable_count),
+                saturate_to_u8(ped_count)
+            );
         }
     }
 

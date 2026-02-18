@@ -8,12 +8,16 @@
 #include <string.h>
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "nvs.h"
+#include "esp_timer.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
 
 #include "bsp/esp-bsp.h"
 #include "app_vision_event.h"
+#include "protocol_uart_v1.h"
 
 static const char *TAG = "main";
 
@@ -21,6 +25,14 @@ static const char *TAG = "main";
 #define UART_TEST_TX_PIN 37
 #define UART_TEST_RX_PIN UART_PIN_NO_CHANGE
 #define UART_TEST_BAUD   115200
+#define UART_V1_NODE_ID  0x01
+
+#define UART_COUNTER_NVS_NAMESPACE "uart_v1"
+#define UART_COUNTER_NVS_KEY       "counter"
+#define UART_COUNTER_SAVE_INTERVAL 64U
+
+static uint32_t s_uart_counter = 0;
+static uint32_t s_frames_since_save = 0;
 
 static void uart_init_tx_only(void)
 {
@@ -44,14 +56,99 @@ static void uart_init_tx_only(void)
     ));
 }
 
-void app_vision_event_uart_send_line(const char *line)
+static void uart_counter_restore(void)
 {
-    if (line == NULL) {
+    nvs_handle_t handle = 0;
+    esp_err_t err = nvs_open(UART_COUNTER_NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        s_uart_counter = 0;
+        return;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "counter restore open failed: %s", esp_err_to_name(err));
+        s_uart_counter = 0;
         return;
     }
 
-    uart_write_bytes(UART_TEST_PORT, line, strlen(line));
-    uart_write_bytes(UART_TEST_PORT, "\n", 1);
+    err = nvs_get_u32(handle, UART_COUNTER_NVS_KEY, &s_uart_counter);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        s_uart_counter = 0;
+    } else if (err != ESP_OK) {
+        ESP_LOGW(TAG, "counter restore read failed: %s", esp_err_to_name(err));
+        s_uart_counter = 0;
+    } else {
+        ESP_LOGI(TAG, "counter restored=%lu", (unsigned long)s_uart_counter);
+    }
+
+    nvs_close(handle);
+}
+
+static void uart_counter_store(void)
+{
+    nvs_handle_t handle = 0;
+    esp_err_t err = nvs_open(UART_COUNTER_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "counter save open failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_set_u32(handle, UART_COUNTER_NVS_KEY, s_uart_counter);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "counter save failed: %s", esp_err_to_name(err));
+    }
+
+    nvs_close(handle);
+    s_frames_since_save = 0;
+}
+
+static void uart_counter_flush_shutdown(void)
+{
+    uart_counter_store();
+}
+
+void app_vision_event_uart_send_payload_v1(uint8_t msg_type,
+                                           uint8_t flags,
+                                           uint8_t luma,
+                                           uint8_t occupied,
+                                           uint8_t stable_count,
+                                           uint8_t raw_count)
+{
+    vision_uart_payload_v1_t payload = {
+        .ver = UART_V1_VERSION,
+        .msg_type = msg_type,
+        .node_id = UART_V1_NODE_ID,
+        .flags = flags,
+        .luma = luma,
+        .occupied = occupied,
+        .stable_count = stable_count,
+        .raw_count = raw_count,
+        .counter = ++s_uart_counter,
+        .uptime_s = (uint32_t)(esp_timer_get_time() / 1000000ULL),
+    };
+
+    uint8_t frame[UART_V1_FRAME_LEN];
+    size_t frame_len = build_uart_frame_v1(&payload, frame);
+    int bytes_written = uart_write_bytes(UART_TEST_PORT, (const char *)frame, frame_len);
+    if (bytes_written != (int)frame_len) {
+        ESP_LOGW(TAG, "uart write short: %d/%u", bytes_written, (unsigned)frame_len);
+    }
+    uart_wait_tx_done(UART_TEST_PORT, pdMS_TO_TICKS(20));
+
+    s_frames_since_save++;
+    if (s_frames_since_save >= UART_COUNTER_SAVE_INTERVAL) {
+        uart_counter_store();
+    }
+
+    ESP_LOGI(TAG, "[UART_TX] t=%lu ctr=%lu occ=%u l=%u sc=%u rc=%u",
+             (unsigned long)payload.uptime_s,
+             (unsigned long)payload.counter,
+             payload.occupied,
+             payload.luma,
+             payload.stable_count,
+             payload.raw_count);
 }
 
 static void vision_event_task(void *arg)
@@ -60,6 +157,7 @@ static void vision_event_task(void *arg)
 
     ESP_LOGI(TAG, "Initialize UART1 TX-only test");
     uart_init_tx_only();
+    uart_counter_restore();
 
     ESP_LOGI(TAG, "Initialize I2C");
     i2c_master_bus_handle_t i2c_handle = NULL;
@@ -86,6 +184,7 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    ESP_ERROR_CHECK(esp_register_shutdown_handler(uart_counter_flush_shutdown));
 
     // Keep flashlight available even in headless mode
     ESP_LOGI(TAG, "Initialize the flashlight");
