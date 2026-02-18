@@ -18,6 +18,8 @@
 
 extern "C" {
 #include "app_video_utils.h"
+
+void app_vision_event_uart_send_line(const char *line);
 }
 
 static const char *TAG = "app_vision_event";
@@ -110,6 +112,12 @@ static void update_stable_count_and_emit_event(int count_frame)
         // Serial-friendly event line for external consumers
         ESP_LOGI(TAG, "EVENT occupancy_changed stable_count=%d occupied=%d",
                  s_stable_count, s_stable_count > 0 ? 1 : 0);
+
+        char uart_line[96];
+        snprintf(uart_line, sizeof(uart_line),
+                 "app_vision_event: EVENT occupancy_changed stable_count=%d occupied=%d",
+                 s_stable_count, s_stable_count > 0 ? 1 : 0);
+        app_vision_event_uart_send_line(uart_line);
         update_mode_label(s_stable_count);
     }
 }
@@ -245,16 +253,26 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
         update_stable_count_and_emit_event(ped_count);
 
         if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
+            char heartbeat_line[128];
             if (is_low_light) {
-                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat low_light luma=%u stable_count=%d raw_count=%d",
+                snprintf(heartbeat_line, sizeof(heartbeat_line),
+                         "frame=%" PRIu32 " heartbeat low_light luma=%u stable_count=%d raw_count=%d",
                          s_frame_count, avg_luma, s_stable_count, ped_count);
             } else if (s_stable_count > 0) {
-                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat occupied stable_count=%d raw_count=%d",
+                snprintf(heartbeat_line, sizeof(heartbeat_line),
+                         "frame=%" PRIu32 " heartbeat occupied stable_count=%d raw_count=%d",
                          s_frame_count, s_stable_count, ped_count);
             } else {
-                ESP_LOGI(TAG, "frame=%" PRIu32 " heartbeat empty stable_count=0 raw_count=%d",
+                snprintf(heartbeat_line, sizeof(heartbeat_line),
+                         "frame=%" PRIu32 " heartbeat empty stable_count=0 raw_count=%d",
                          s_frame_count, ped_count);
             }
+
+            ESP_LOGI(TAG, "%s", heartbeat_line);
+
+            char uart_line[160];
+            snprintf(uart_line, sizeof(uart_line), "app_vision_event: %s", heartbeat_line);
+            app_vision_event_uart_send_line(uart_line);
         }
     }
 
