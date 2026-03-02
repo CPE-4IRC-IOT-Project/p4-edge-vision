@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
+#include "driver/rtc_io.h"
 
 #include "bsp/esp-bsp.h"
 #include "app_vision_event.h"
@@ -33,6 +34,20 @@ static const char *TAG = "main";
 
 static uint32_t s_uart_counter = 0;
 static uint32_t s_frames_since_save = 0;
+
+static void c6_enable_if_configured(void)
+{
+#if CONFIG_BSP_CONTROL_C6_EN_PIN
+    rtc_gpio_init(BSP_C6_EN_PIN);
+    rtc_gpio_set_direction(BSP_C6_EN_PIN, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_pulldown_dis(BSP_C6_EN_PIN);
+    rtc_gpio_pullup_dis(BSP_C6_EN_PIN);
+    rtc_gpio_hold_dis(BSP_C6_EN_PIN);
+    rtc_gpio_set_level(BSP_C6_EN_PIN, 1);
+    rtc_gpio_hold_en(BSP_C6_EN_PIN);
+    ESP_LOGI(TAG, "C6 enable pin asserted");
+#endif
+}
 
 static void uart_init_tx_only(void)
 {
@@ -185,6 +200,15 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(esp_register_shutdown_handler(uart_counter_flush_shutdown));
+
+    c6_enable_if_configured();
+
+    // BLE temperature client disabled to focus on UART path.
+    // ESP_LOGI(TAG, "Initialize BLE temperature client");
+    // esp_err_t ble_ret = app_ble_temp_client_start();
+    // if (ble_ret != ESP_OK) {
+    //     ESP_LOGW(TAG, "BLE temperature client start failed: %s", esp_err_to_name(ble_ret));
+    // }
 
     // Keep flashlight available even in headless mode
     ESP_LOGI(TAG, "Initialize the flashlight");

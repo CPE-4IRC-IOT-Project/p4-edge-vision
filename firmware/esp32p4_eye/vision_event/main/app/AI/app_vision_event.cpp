@@ -4,6 +4,7 @@
 
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_timer.h"
 #include "driver/i2c_master.h"
 #include "driver/ppa.h"
 #include "esp_heap_caps.h"
@@ -32,17 +33,18 @@ static size_t s_preview_buffer_size = 0;
 
 static constexpr uint32_t WARMUP_FRAMES = 30;
 static constexpr uint32_t INFERENCE_STRIDE = 3;
-static constexpr uint32_t HEARTBEAT_INTERVAL_FRAMES = 120;
+static constexpr int64_t HEARTBEAT_INTERVAL_US = 30LL * 1000000LL;
 static constexpr float DETECT_SCORE_THRESHOLD = 0.7f;
 static constexpr uint32_t MIN_BBOX_AREA_PX = 1200;
 static constexpr uint8_t LOW_LIGHT_LUMA_THRESHOLD = 18;
 static constexpr uint32_t LUMA_SAMPLE_STRIDE = 32;
 static constexpr int PREVIEW_SCALE_LEVEL = 1;  // x1 (widest view available in current crop pipeline)
-static constexpr uint32_t STABLE_COUNT_FRAMES = 5;
+static constexpr uint32_t STABLE_COUNT_FRAMES = 3;
 
 static int s_stable_count = 0;
 static int s_candidate_count = 0;
 static uint32_t s_candidate_frames = 0;
+static int64_t s_last_heartbeat_sent_us = 0;
 
 static uint8_t saturate_to_u8(int value)
 {
@@ -126,6 +128,7 @@ static void update_stable_count_and_emit_event(int count_frame, uint8_t avg_luma
             saturate_to_u8(s_stable_count),
             saturate_to_u8(count_frame)
         );
+        s_last_heartbeat_sent_us = esp_timer_get_time();
         update_mode_label(s_stable_count);
     }
 }
@@ -260,7 +263,9 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
 
         update_stable_count_and_emit_event(ped_count, avg_luma, is_low_light);
 
-        if ((s_frame_count % HEARTBEAT_INTERVAL_FRAMES) == 0) {
+        int64_t now_us = esp_timer_get_time();
+        if (s_last_heartbeat_sent_us == 0 ||
+            (now_us - s_last_heartbeat_sent_us) >= HEARTBEAT_INTERVAL_US) {
             char heartbeat_line[128];
             if (is_low_light) {
                 snprintf(heartbeat_line, sizeof(heartbeat_line),
@@ -286,6 +291,7 @@ static void camera_frame_cb(uint8_t *camera_buf, uint8_t camera_buf_index,
                 saturate_to_u8(s_stable_count),
                 saturate_to_u8(ped_count)
             );
+            s_last_heartbeat_sent_us = now_us;
         }
     }
 
