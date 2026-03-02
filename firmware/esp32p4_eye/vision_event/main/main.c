@@ -18,9 +18,18 @@
 
 #include "bsp/esp-bsp.h"
 #include "app_vision_event.h"
+#include "app_ble_temp_client.h"
 #include "protocol_uart_v1.h"
 
 static const char *TAG = "main";
+#define HCI_UART_RX_ONLY_TEST_MODE 0
+#define HCI_UART_SANITY_TEST_MODE 0
+#define C6_UART_TEMP_RX_MODE 1
+
+#define C6_UART_PORT ((uart_port_t)CONFIG_BT_NIMBLE_TRANSPORT_UART_PORT)
+#define C6_UART_TX_PIN CONFIG_BT_NIMBLE_UART_TX_PIN
+#define C6_UART_RX_PIN CONFIG_BT_NIMBLE_UART_RX_PIN
+#define C6_UART_BAUD CONFIG_BT_NIMBLE_HCI_UART_BAUDRATE
 
 #define UART_TEST_PORT   UART_NUM_1
 #define UART_TEST_TX_PIN 37
@@ -34,6 +43,137 @@ static const char *TAG = "main";
 
 static uint32_t s_uart_counter = 0;
 static uint32_t s_frames_since_save = 0;
+
+#if HCI_UART_SANITY_TEST_MODE
+static void hci_uart_sanity_test(void)
+{
+    const uart_port_t hci_uart_port = (uart_port_t)CONFIG_BT_NIMBLE_TRANSPORT_UART_PORT;
+    const int hci_uart_tx_pin = CONFIG_BT_NIMBLE_UART_TX_PIN;
+    const int hci_uart_rx_pin = CONFIG_BT_NIMBLE_UART_RX_PIN;
+    const int hci_uart_baud = CONFIG_BT_NIMBLE_HCI_UART_BAUDRATE;
+
+    const uart_config_t cfg = {
+        .baud_rate = hci_uart_baud,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+
+    ESP_LOGI(TAG,
+             "HCI UART sanity test on UART%d (TX=%d RX=%d baud=%d)",
+             (int)hci_uart_port, hci_uart_tx_pin, hci_uart_rx_pin, hci_uart_baud);
+
+    esp_err_t err = uart_driver_install(hci_uart_port, 256, 0, 0, NULL, 0);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "HCI test uart_driver_install failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    err = uart_param_config(hci_uart_port, &cfg);
+    if (err == ESP_OK) {
+        err = uart_set_pin(
+            hci_uart_port,
+            hci_uart_tx_pin,
+            hci_uart_rx_pin,
+            UART_PIN_NO_CHANGE,
+            UART_PIN_NO_CHANGE
+        );
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "HCI test UART config failed: %s", esp_err_to_name(err));
+        uart_driver_delete(hci_uart_port);
+        return;
+    }
+
+    uart_flush_input(hci_uart_port);
+
+    uint8_t rx[256] = {0};
+    int rx_len = 0;
+    const int64_t deadline_us = esp_timer_get_time() + 2500000; // 2.5 s timeout
+    while (esp_timer_get_time() < deadline_us && rx_len < (int)sizeof(rx)) {
+        int n = uart_read_bytes(
+            hci_uart_port,
+            rx + rx_len,
+            sizeof(rx) - rx_len,
+            pdMS_TO_TICKS(20)
+        );
+        if (n > 0) {
+            rx_len += n;
+        }
+    }
+
+    if (rx_len == 0) {
+        ESP_LOGE(TAG, "HCI UART test failed: no bytes received from C6");
+    } else {
+        ESP_LOGI(TAG, "HCI UART test received %d bytes", rx_len);
+        for (int i = 0; i < rx_len; ++i) {
+            ESP_LOGI(TAG, "HCI RX[%d]=0x%02X", i, rx[i]);
+        }
+    }
+
+    uart_driver_delete(hci_uart_port);
+}
+#endif
+
+static void c6_uart_rx_init(void)
+{
+    const uart_config_t cfg = {
+        .baud_rate = C6_UART_BAUD,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+
+    ESP_ERROR_CHECK(uart_driver_install(C6_UART_PORT, 1024, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(C6_UART_PORT, &cfg));
+    ESP_ERROR_CHECK(uart_set_pin(C6_UART_PORT,
+                                 C6_UART_TX_PIN,
+                                 C6_UART_RX_PIN,
+                                 UART_PIN_NO_CHANGE,
+                                 UART_PIN_NO_CHANGE));
+
+    ESP_LOGI(TAG,
+             "C6 UART RX ready on UART%d (RX=%d TX=%d baud=%d)",
+             (int)C6_UART_PORT,
+             C6_UART_RX_PIN,
+             C6_UART_TX_PIN,
+             C6_UART_BAUD);
+}
+
+static void c6_uart_rx_task(void *arg)
+{
+    (void)arg;
+
+    char line[96];
+    size_t idx = 0;
+    uint8_t byte = 0;
+
+    while (1) {
+        int n = uart_read_bytes(C6_UART_PORT, &byte, 1, pdMS_TO_TICKS(200));
+        if (n != 1) {
+            continue;
+        }
+
+        if (byte == '\r' || byte == '\n') {
+            if (idx > 0) {
+                line[idx] = '\0';
+                ESP_LOGI(TAG, "[C6_UART_RX] %s", line);
+                idx = 0;
+            }
+            continue;
+        }
+
+        if (idx < sizeof(line) - 1U) {
+            line[idx++] = (char)byte;
+        } else {
+            idx = 0;
+        }
+    }
+}
 
 static void c6_enable_if_configured(void)
 {
@@ -202,13 +342,35 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_register_shutdown_handler(uart_counter_flush_shutdown));
 
     c6_enable_if_configured();
+    vTaskDelay(pdMS_TO_TICKS(1200));
+#if HCI_UART_SANITY_TEST_MODE
+    hci_uart_sanity_test();
+#endif
 
-    // BLE temperature client disabled to focus on UART path.
-    // ESP_LOGI(TAG, "Initialize BLE temperature client");
-    // esp_err_t ble_ret = app_ble_temp_client_start();
-    // if (ble_ret != ESP_OK) {
-    //     ESP_LOGW(TAG, "BLE temperature client start failed: %s", esp_err_to_name(ble_ret));
-    // }
+#if HCI_UART_RX_ONLY_TEST_MODE
+    ESP_LOGW(TAG, "UART RX-only test mode active: BLE client init skipped");
+#else
+#if C6_UART_TEMP_RX_MODE
+    ESP_LOGI(TAG, "Initialize C6 UART RX stream (no BLE client)");
+    c6_uart_rx_init();
+    BaseType_t c6_rx_task_ok = xTaskCreatePinnedToCore(
+        c6_uart_rx_task,
+        "c6_uart_rx",
+        4 * 1024,
+        NULL,
+        5,
+        NULL,
+        0
+    );
+    ESP_ERROR_CHECK(c6_rx_task_ok == pdPASS ? ESP_OK : ESP_FAIL);
+#else
+    ESP_LOGI(TAG, "Initialize BLE temperature client (HCI UART RX=GPIO34 TX=GPIO7)");
+    esp_err_t ble_ret = app_ble_temp_client_start();
+    if (ble_ret != ESP_OK) {
+        ESP_LOGW(TAG, "BLE temperature client start failed: %s", esp_err_to_name(ble_ret));
+    }
+#endif
+#endif
 
     // Keep flashlight available even in headless mode
     ESP_LOGI(TAG, "Initialize the flashlight");

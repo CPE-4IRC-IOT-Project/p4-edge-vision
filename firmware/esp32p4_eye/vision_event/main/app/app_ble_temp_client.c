@@ -1,12 +1,5 @@
 #include "app_ble_temp_client.h"
 
-#include "esp_log.h"
-
-static const char *TAG = "ble_temp_client";
-
-// BLE module temporarily disabled so the P4 app can focus on UART-only behavior.
-#if 0
-
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -21,6 +14,8 @@ static const char *TAG = "ble_temp_client";
 #include "nimble/nimble_port_freertos.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+
+static const char *TAG = "ble_temp_client";
 
 // UUIDs shared with the ESP32-C6 temperature sensor.
 static const ble_uuid128_t BLE_TEMP_SERVICE_UUID =
@@ -387,6 +382,14 @@ esp_err_t app_ble_temp_client_start(void)
     ble_hs_cfg.sync_cb = ble_temp_on_sync;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
+    // Start without encryption / bonding for first bring-up.
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
+    ble_hs_cfg.sm_bonding = 0;
+    ble_hs_cfg.sm_mitm = 0;
+    ble_hs_cfg.sm_sc = 0;
+    ble_hs_cfg.sm_our_key_dist = 0;
+    ble_hs_cfg.sm_their_key_dist = 0;
+
     ble_svc_gap_init();
     ble_svc_gatt_init();
     ble_svc_gap_device_name_set("P4-BLE-TEMP-CLIENT");
@@ -394,7 +397,7 @@ esp_err_t app_ble_temp_client_start(void)
 
     nimble_port_freertos_init(ble_temp_host_task);
     s_ble_started = true;
-    ESP_LOGI(TAG, "BLE temperature client started");
+    ESP_LOGI(TAG, "BLE temperature client started (unencrypted mode)");
     return ESP_OK;
 }
 
@@ -411,19 +414,4 @@ bool app_ble_temp_client_get_latest(float *out_temp_c, uint32_t *out_age_ms)
         *out_age_ms = esp_log_timestamp() - s_last_temp_ms;
     }
     return true;
-}
-
-#endif
-
-esp_err_t app_ble_temp_client_start(void)
-{
-    ESP_LOGW(TAG, "BLE code commented out: app_ble_temp_client_start skipped");
-    return ESP_ERR_NOT_SUPPORTED;
-}
-
-bool app_ble_temp_client_get_latest(float *out_temp_c, uint32_t *out_age_ms)
-{
-    (void)out_temp_c;
-    (void)out_age_ms;
-    return false;
 }
