@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <math.h>
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -40,9 +42,14 @@ static const char *TAG = "main";
 #define UART_COUNTER_NVS_NAMESPACE "uart_v1"
 #define UART_COUNTER_NVS_KEY       "counter"
 #define UART_COUNTER_SAVE_INTERVAL 64U
+#define UART_TEMP_TX_PERIOD_MS     120000U
 
 static uint32_t s_uart_counter = 0;
 static uint32_t s_frames_since_save = 0;
+static portMUX_TYPE s_temp_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool s_latest_temp_valid = false;
+static float s_latest_temp_c = 0.0f;
+static uint32_t s_latest_temp_ms = 0;
 
 #if HCI_UART_SANITY_TEST_MODE
 static void hci_uart_sanity_test(void)
@@ -144,6 +151,93 @@ static void c6_uart_rx_init(void)
              C6_UART_BAUD);
 }
 
+static void temp_cache_update(float temp_c)
+{
+    taskENTER_CRITICAL(&s_temp_lock);
+    s_latest_temp_c = temp_c;
+    s_latest_temp_ms = esp_log_timestamp();
+    s_latest_temp_valid = true;
+    taskEXIT_CRITICAL(&s_temp_lock);
+}
+
+static bool temp_cache_get_latest(float *out_temp_c, uint32_t *out_age_ms)
+{
+    bool valid = false;
+    float temp_c = 0.0f;
+    uint32_t age_ms = 0;
+
+    taskENTER_CRITICAL(&s_temp_lock);
+    valid = s_latest_temp_valid;
+    if (valid) {
+        temp_c = s_latest_temp_c;
+        age_ms = esp_log_timestamp() - s_latest_temp_ms;
+    }
+    taskEXIT_CRITICAL(&s_temp_lock);
+
+    if (!valid) {
+        return false;
+    }
+
+    if (out_temp_c != NULL) {
+        *out_temp_c = temp_c;
+    }
+    if (out_age_ms != NULL) {
+        *out_age_ms = age_ms;
+    }
+    return true;
+}
+
+static bool app_get_latest_temp(float *out_temp_c, uint32_t *out_age_ms)
+{
+#if C6_UART_TEMP_RX_MODE
+    return temp_cache_get_latest(out_temp_c, out_age_ms);
+#else
+    return app_ble_temp_client_get_latest(out_temp_c, out_age_ms);
+#endif
+}
+
+static bool c6_uart_try_parse_temp(const char *line, float *out_temp_c)
+{
+    if (line == NULL || out_temp_c == NULL) {
+        return false;
+    }
+
+    // Preferred compact bridge format from C6 controller.
+    if (strncmp(line, "TEMP,", 5) == 0) {
+        char *endptr = NULL;
+        float temp_c = strtof(line + 5, &endptr);
+        if (endptr != line + 5) {
+            *out_temp_c = temp_c;
+            return true;
+        }
+    }
+
+    // Fallback for verbose logs like: "... temp=27.29 C".
+    const char *temp_field = strstr(line, "temp=");
+    if (temp_field != NULL) {
+        char *endptr = NULL;
+        float temp_c = strtof(temp_field + 5, &endptr);
+        if (endptr != temp_field + 5) {
+            *out_temp_c = temp_c;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void c6_uart_handle_line(const char *line)
+{
+    float temp_c = 0.0f;
+    if (c6_uart_try_parse_temp(line, &temp_c)) {
+        temp_cache_update(temp_c);
+        ESP_LOGI(TAG, "[C6_TEMP] %.2f C", (double)temp_c);
+        return;
+    }
+
+    ESP_LOGI(TAG, "[C6_UART_RX] %s", line);
+}
+
 static void c6_uart_rx_task(void *arg)
 {
     (void)arg;
@@ -161,7 +255,7 @@ static void c6_uart_rx_task(void *arg)
         if (byte == '\r' || byte == '\n') {
             if (idx > 0) {
                 line[idx] = '\0';
-                ESP_LOGI(TAG, "[C6_UART_RX] %s", line);
+                c6_uart_handle_line(line);
                 idx = 0;
             }
             continue;
@@ -306,9 +400,43 @@ void app_vision_event_uart_send_payload_v1(uint8_t msg_type,
              payload.raw_count);
 }
 
+static void app_uart_send_temperature_payload_v1(void)
+{
+    float temp_c = 0.0f;
+    uint32_t age_ms = 0;
+    if (!app_get_latest_temp(&temp_c, &age_ms)) {
+        ESP_LOGW(TAG, "[UART_TX_TEMP] no temperature sample available yet");
+        return;
+    }
+
+    int32_t centi = (int32_t)lroundf((double)temp_c * 100.0);
+    if (centi > INT16_MAX) {
+        centi = INT16_MAX;
+    } else if (centi < INT16_MIN) {
+        centi = INT16_MIN;
+    }
+    int16_t temp_centi = (int16_t)centi;
+
+    app_vision_event_uart_send_payload_v1(
+        UART_V1_MSG_TEMPERATURE,
+        0,
+        (uint8_t)(temp_centi & 0xFF),
+        (uint8_t)(((uint16_t)temp_centi >> 8) & 0xFF),
+        0,
+        0
+    );
+
+    ESP_LOGI(TAG, "[UART_TX_TEMP] temp=%.2f C centi=%d age_ms=%lu",
+             (double)temp_c,
+             (int)temp_centi,
+             (unsigned long)age_ms);
+}
+
 static void vision_event_task(void *arg)
 {
     (void)arg;
+    uint32_t last_temp_tx_ms = esp_log_timestamp();
+    bool temp_sent_once = false;
 
     ESP_LOGI(TAG, "Initialize UART1 TX-only test");
     uart_init_tx_only();
@@ -324,7 +452,14 @@ static void vision_event_task(void *arg)
 
     ESP_LOGI(TAG, "Vision event mode running");
     while (1) {
-        // HELLO_FROM_ESP32 disabled: UART now forwards app_vision_event heartbeat lines.
+        uint32_t now_ms = esp_log_timestamp();
+        float latest_temp_c = 0.0f;
+        if (app_get_latest_temp(&latest_temp_c, NULL) &&
+            (!temp_sent_once || (uint32_t)(now_ms - last_temp_tx_ms) >= UART_TEMP_TX_PERIOD_MS)) {
+            app_uart_send_temperature_payload_v1();
+            last_temp_tx_ms = now_ms;
+            temp_sent_once = true;
+        }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

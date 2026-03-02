@@ -16,6 +16,7 @@ extern "C" {
 
 #define UART_V1_MSG_HEARTBEAT         0x01
 #define UART_V1_MSG_OCCUPANCY_CHANGED 0x02
+#define UART_V1_MSG_TEMPERATURE       0x03
 
 #define UART_V1_FLAG_LOW_LIGHT    (1U << 0)
 
@@ -90,6 +91,19 @@ static inline void deserialize_payload_v1(vision_uart_payload_v1_t *payload, con
     payload->raw_count = in[7];
     payload->counter = uart_v1_read_be32(&in[8]);
     payload->uptime_s = uart_v1_read_be32(&in[12]);
+}
+
+static inline void uart_v1_encode_temp_centi(vision_uart_payload_v1_t *payload, int16_t temp_centi)
+{
+    payload->luma = (uint8_t)(temp_centi & 0xFF);
+    payload->occupied = (uint8_t)(((uint16_t)temp_centi >> 8) & 0xFF);
+    payload->stable_count = 0;
+    payload->raw_count = 0;
+}
+
+static inline int16_t uart_v1_decode_temp_centi(const vision_uart_payload_v1_t *payload)
+{
+    return (int16_t)((uint16_t)payload->luma | ((uint16_t)payload->occupied << 8));
 }
 
 static inline size_t build_uart_frame_v1(const vision_uart_payload_v1_t *payload, uint8_t out[UART_V1_FRAME_LEN])
