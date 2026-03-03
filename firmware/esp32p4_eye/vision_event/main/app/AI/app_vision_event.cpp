@@ -33,7 +33,7 @@ static size_t s_preview_buffer_size = 0;
 
 static constexpr uint32_t WARMUP_FRAMES = 30;
 static constexpr uint32_t INFERENCE_STRIDE = 3;
-static constexpr int64_t HEARTBEAT_INTERVAL_US = 30LL * 1000000LL;
+static constexpr int64_t HEARTBEAT_INTERVAL_US = 120LL * 1000000LL;
 static constexpr float DETECT_SCORE_THRESHOLD = 0.7f;
 static constexpr uint32_t MIN_BBOX_AREA_PX = 1200;
 static constexpr uint8_t LOW_LIGHT_LUMA_THRESHOLD = 18;
